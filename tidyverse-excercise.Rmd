@@ -33,11 +33,19 @@ The data is here: https://www.dropbox.com/s/5jy18d1thntcc5t/COVID-19_Vaccination
 
 ```{r}
 
+dir.create(file.path('data'))
+
+cov_data <- download.file("https://www.dropbox.com/s/5jy18d1thntcc5t/COVID-19_Vaccinations_in_the_United_States_County.csv.tar.gz?dl=true", destfile = "data/covid19_data.csv.tar.gz")
+
+## don't forget to add large file to gitignore..
+
 ```
 
 #### Read the file
 
 ```{r}
+library(data.table)
+cov_data <- fread("data/covid19_data.csv.tar.gz")
 
 ```
 
@@ -49,13 +57,15 @@ Now the data is in R workspace. Do the following
 ### Count the number of variabes and rows
 
 ```{r}
+nrow(cov_data)
+ncol(cov_data)
 
 ```
 
 ### Print out the first 6 rows of the data.frame
 
 ```{r}
-
+head(cov_data)
 
 ```
 
@@ -67,6 +77,30 @@ Now the data is in R workspace. Do the following
 - Obviously there are data points not from states. What are they?
 
 ```{r}
+library(tidyverse)
+
+names(cov_data)
+
+# inspect fips code - first 2 numbers indicate states
+cov_data$FIPS %>% str_sub(1,2) %>% factor() %>% levels()
+# "UNK" = unkonwn
+
+# count observarions with unknown state
+cov_data %>% count(FIPS == "UNK")
+
+
+# Check recipient state variable
+s <- cov_data$Recip_State %>% factor() %>% levels() 
+s <- s[!s %in% state.abb]
+
+# states not in built-in state.abb of R:
+# Washington DC
+# Guam	GU
+# Puerto Rico	PR
+# Virgin Islands VI
+
+
+
 
 ```
 
@@ -78,6 +112,12 @@ Now the data is in R workspace. Do the following
 The variable Date is character. Convert it to a Date variable.
 
 ```{r}
+library(lubridate)
+library(magrittr)
+cov_data$Date %>% typeof()
+cov_data$Date %>% head()
+cov_data$Date %<>% as.Date(format = "%m/%d/%y")
+cov_data$Date %>% class()
 
 ```
 
@@ -87,6 +127,9 @@ First remove the non-country entries
 
 ```{r}
 
+cov_data %<>% filter(!FIPS == "UNK") 
+
+
 ```
 
 
@@ -95,6 +138,17 @@ First remove the non-country entries
 Find the latest date of the data, then subset the data with only the newest date for each country
 
 ```{r}
+cov_data$Date %>% max()
+
+dates_df <- cov_data %>% 
+                group_by(Recip_State) %>%
+                summarise(latest = max(Date))
+
+cov_data <- left_join(cov_data, dates_df)
+
+subset_df <- cov_data %>% 
+  group_by(Recip_State) %>% 
+  filter(Date == latest)
 
 ```
 
@@ -103,7 +157,14 @@ Find the latest date of the data, then subset the data with only the newest date
 Which county has the highest vaccination rate? What is the number?
 
 ```{r}
+names(subset_df)
 
+cov_data %>%
+  group_by(Recip_State) %>%
+  summarize(vacc_rate = max(Completeness_pct)) %>% 
+  arrange(desc(vacc_rate)) %>% 
+  slice(1)
+# Virgin Islands, 100 pct
 ```
 
 
@@ -115,17 +176,35 @@ Using the latest data created above, find out proportion of counties with more t
 
 ```{r}
 
+vacc_df <- subset_df %>%
+              group_by(Recip_County) %>% 
+              summarise(vacc_takeup = max(Administered_Dose1_Pop_Pct)) 
+vacc_df %>% filter(vacc_takeup > .5) %>% nrow() / nrow(vacc_df)
+              
+# .97 pct
+
 ```
 
 ### Proportion of county with more than 50 percent vaccination rate, by state (latest)
 
 ```{r}
+subset_df %>% group_by(Recip_State) %>% 
+                summarise(n = n(),
+                v_over50 = sum(as.numeric(Administered_Dose1_Pop_Pct > .5)),
+                share = v_over50/n) %>% 
+                arrange(desc(share))  %>% head(15)  
+
+# 62 pct Florida
+
 
 ```
 
 ### Date when the vaccination rate exceeded 10 percent in each county
 
 ```{r}
+
+date_over10_cty <- cov_data %>% filter(Administered_Dose1_Pop_Pct > .1) %>% group_by(Recip_County) %>% summarise(over10_date = min(Date))
+summary(date_over10_cty$over10_date)
 
 ```
 
@@ -136,6 +215,9 @@ and average of vaccination pct across counties for each day (Hint: grouping and 
 
 
 ```{r}
+names(cov_data)
+cov_data %>% group_by(Recip_State, Date) %>% summarise(fully_vacc_abs = sum(Series_Complete_Yes),
+                                                       avg_vacc_rate = mean(Completeness_pct))
 
 ```
 
@@ -149,12 +231,26 @@ Now let's visualize the outputs using ggplot
 
 ```{r}
 
+vaccs_p_week <- cov_data %>% group_by(MMWR_week) %>% summarise(sum =sum(Administered_Dose1_Recip, na.rm = T))
+
+
+ggplot(vaccs_p_week, aes(MMWR_week, sum))+
+  geom_bar(stat="identity", na.rm = TRUE)
+
 ```
 
 
 ### Time series plot of total vaccination by the state
 
 ```{r}
+vaccs_p_week_p_state <- cov_data %>% group_by(MMWR_week, Recip_State) %>% summarise(sum =sum(Administered_Dose1_Recip, na.rm = T))
+
+vaccs_p_week_p_state$Recip_State %<>% factor()
+
+ggplot(vaccs_p_week_p_state, aes(MMWR_week, sum, color = Recip_State))+
+  geom_line()
+
+## caution: only first shots
 
 ```
 

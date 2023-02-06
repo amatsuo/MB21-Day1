@@ -1,7 +1,7 @@
 ---
 title: "Tidyverse Exercise"
 author: ""
-date: "01/08/2022"
+date: "06/02/2023"
 output: html_document
 ---
 
@@ -27,12 +27,12 @@ We will use the country level vaccination in the US. This is public data publish
 
 You can check the variable definition from the webpage. 
 
-The data is here: https://www.dropbox.com/s/5jy18d1thntcc5t/COVID-19_Vaccinations_in_the_United_States_County.csv.tar.gz?dl=true
+The data is here: https://www.dropbox.com/s/3bqwbxw6mr9t9jv/COVID-19_Vaccinations_in_the_United_States_County.csv.tar.gz?dl=1
 
 #### Download the file
 
 ```{r}
-
+download.file("https://www.dropbox.com/s/3bqwbxw6mr9t9jv/COVID-19_Vaccinations_in_the_United_States_County.csv.tar.gz?dl=1", destfile = "COVID-19_Vaccinations_in_the_United_States_County.csv.tar.gz")
 ```
 
 #### Read the file
